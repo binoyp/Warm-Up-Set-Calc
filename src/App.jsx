@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useState, useMemo } from "react";
 
 const PLATES_KG = [25, 20, 15, 10, 5, 2.5, 1.25];
 const PLATES_LB = [45, 35, 25, 10, 5, 2.5];
 const BAR_KG = 20;
 const BAR_LB = 45;
-const STORAGE_KEY = "warmup-calc-session";
 
 const WARMUP_SCHEME = [
   { pct: 0, reps: 10, label: "Bar Only" },
@@ -30,57 +29,6 @@ function calcPlates(totalWeight, barWeight, availablePlates) {
 
 function roundToNearest(value, increment) {
   return Math.round(value / increment) * increment;
-}
-
-function clampToBar(value, barWeight) {
-  return Math.max(barWeight, value);
-}
-
-function parseWorkingWeight(value, barWeight) {
-  const parsed = Number.parseFloat(value);
-  if (Number.isNaN(parsed) || parsed <= 0) return barWeight;
-  return clampToBar(parsed, barWeight);
-}
-
-function convertWeightString(value, fromUnit, newBarWeight) {
-  const parsed = Number.parseFloat(value);
-  if (Number.isNaN(parsed) || parsed <= 0) return String(newBarWeight);
-  const converted = fromUnit === "kg" ? Math.round(parsed * 2.205) : Math.round(parsed / 2.205);
-  return String(clampToBar(converted, newBarWeight));
-}
-
-function loadStoredSession() {
-  if (typeof window === "undefined") {
-    return {
-      unit: "kg",
-      lift: "squat",
-      liftWeights: { squat: "100", bench: "100", deadlift: "100" },
-    };
-  }
-
-  const fallback = {
-    unit: "kg",
-    lift: "squat",
-    liftWeights: { squat: "100", bench: "100", deadlift: "100" },
-  };
-
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return fallback;
-
-    const parsed = JSON.parse(raw);
-    return {
-      unit: parsed.unit === "lb" ? "lb" : "kg",
-      lift: ["squat", "bench", "deadlift"].includes(parsed.lift) ? parsed.lift : "squat",
-      liftWeights: {
-        squat: String(parsed.liftWeights?.squat ?? fallback.liftWeights.squat),
-        bench: String(parsed.liftWeights?.bench ?? fallback.liftWeights.bench),
-        deadlift: String(parsed.liftWeights?.deadlift ?? fallback.liftWeights.deadlift),
-      },
-    };
-  } catch {
-    return fallback;
-  }
 }
 
 const PLATE_COLORS = {
@@ -171,23 +119,14 @@ function PlateStack({ plates, unit }) {
 }
 
 export default function WarmupCalculator() {
-  const [{ unit, lift, liftWeights }, setSession] = useState(loadStoredSession);
+  const [workingWeight, setWorkingWeight] = useState(100);
+  const [unit, setUnit] = useState("kg");
+  const [lift, setLift] = useState("squat");
+  const [inputValue, setInputValue] = useState("100");
 
   const barWeight = unit === "kg" ? BAR_KG : BAR_LB;
   const plates = unit === "kg" ? PLATES_KG : PLATES_LB;
   const increment = unit === "kg" ? 2.5 : 5;
-  const workingWeight = parseWorkingWeight(liftWeights[lift], barWeight);
-
-  useEffect(() => {
-    window.localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        unit,
-        lift,
-        liftWeights,
-      }),
-    );
-  }, [unit, lift, liftWeights]);
 
   const warmupSets = useMemo(() => {
     return WARMUP_SCHEME.map((s) => {
@@ -201,34 +140,20 @@ export default function WarmupCalculator() {
     });
   }, [workingWeight, unit, barWeight, plates, increment]);
 
-  const handleInput = (liftName, value) => {
-    setSession((current) => ({
-      ...current,
-      liftWeights: {
-        ...current.liftWeights,
-        [liftName]: value,
-      },
-    }));
-  };
-
-  const adjustSelectedLift = (delta) => {
-    const nextWeight = clampToBar(workingWeight + delta, barWeight);
-    handleInput(lift, String(nextWeight));
+  const handleInput = (val) => {
+    setInputValue(val);
+    const num = parseFloat(val);
+    if (!isNaN(num) && num > 0) setWorkingWeight(num);
   };
 
   const toggleUnit = () => {
     const newUnit = unit === "kg" ? "lb" : "kg";
     const newBar = newUnit === "kg" ? BAR_KG : BAR_LB;
-    setSession((current) => ({
-      ...current,
-      unit: newUnit,
-      liftWeights: Object.fromEntries(
-        Object.entries(current.liftWeights).map(([liftName, value]) => [
-          liftName,
-          convertWeightString(value, current.unit, newBar),
-        ]),
-      ),
-    }));
+    const converted = unit === "kg" ? Math.round(workingWeight * 2.205) : Math.round(workingWeight / 2.205);
+    const clamped = Math.max(newBar, converted);
+    setUnit(newUnit);
+    setWorkingWeight(clamped);
+    setInputValue(String(clamped));
   };
 
   const liftEmoji = { squat: "🏋️", bench: "💪", deadlift: "🔥" };
@@ -293,7 +218,7 @@ export default function WarmupCalculator() {
             {["squat", "bench", "deadlift"].map((l) => (
               <button
                 key={l}
-                onClick={() => setSession((current) => ({ ...current, lift: l }))}
+                onClick={() => setLift(l)}
                 style={{
                   flex: 1,
                   padding: "10px 0",
@@ -315,131 +240,81 @@ export default function WarmupCalculator() {
             ))}
           </div>
 
-          {/* Weight inputs */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(132px, 1fr))",
-                gap: 10,
-              }}
-            >
-              {["squat", "bench", "deadlift"].map((liftName) => {
-                const isActive = lift === liftName;
-
-                return (
-                  <label
-                    key={liftName}
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 6,
-                      padding: 10,
-                      background: isActive ? "#21110f" : "#151515",
-                      border: `1px solid ${isActive ? "var(--accent)" : "var(--border)"}`,
-                      borderRadius: 8,
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: 10,
-                        color: isActive ? "var(--accent2)" : "var(--muted)",
-                        textTransform: "uppercase",
-                        letterSpacing: 1.5,
-                      }}
-                    >
-                      {liftName}
-                    </span>
-                    <input
-                      type="number"
-                      value={liftWeights[liftName]}
-                      onChange={(e) => handleInput(liftName, e.target.value)}
-                      onFocus={() => setSession((current) => ({ ...current, lift: liftName }))}
-                      style={{
-                        background: "#111",
-                        border: `2px solid ${isActive ? "var(--accent)" : "#222"}`,
-                        borderRadius: 6,
-                        padding: "10px 12px",
-                        color: "#fff",
-                        fontFamily: "'Oswald', sans-serif",
-                        fontSize: 26,
-                        fontWeight: 700,
-                        textAlign: "center",
-                        outline: "none",
-                        width: "100%",
-                      }}
-                    />
-                  </label>
-                );
-              })}
-            </div>
-
-            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-              <div style={{ flex: 1 }}>
-                <label
+          {/* Weight input */}
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <div style={{ flex: 1 }}>
+              <label
+                style={{
+                  fontSize: 10,
+                  color: "var(--muted)",
+                  textTransform: "uppercase",
+                  letterSpacing: 1.5,
+                  display: "block",
+                  marginBottom: 6,
+                }}
+              >
+                Working Weight
+              </label>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <button
+                  onClick={() => {
+                    const nw = Math.max(barWeight, workingWeight - increment);
+                    setWorkingWeight(nw);
+                    setInputValue(String(nw));
+                  }}
                   style={{
-                    fontSize: 10,
-                    color: "var(--muted)",
-                    textTransform: "uppercase",
-                    letterSpacing: 1.5,
-                    display: "block",
-                    marginBottom: 6,
+                    width: 36,
+                    height: 44,
+                    background: "#222",
+                    border: "1px solid var(--border)",
+                    borderRadius: 6,
+                    color: "#fff",
+                    fontSize: 20,
+                    cursor: "pointer",
+                    fontWeight: 700,
                   }}
                 >
-                  Adjust {lift}
-                </label>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <button
-                    onClick={() => adjustSelectedLift(-increment)}
-                    style={{
-                      width: 36,
-                      height: 44,
-                      background: "#222",
-                      border: "1px solid var(--border)",
-                      borderRadius: 6,
-                      color: "#fff",
-                      fontSize: 20,
-                      cursor: "pointer",
-                      fontWeight: 700,
-                    }}
-                  >
-                    −
-                  </button>
-                  <div
-                    style={{
-                      flex: 1,
-                      height: 44,
-                      background: "#111",
-                      border: "1px solid var(--border)",
-                      borderRadius: 6,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: "var(--muted)",
-                      fontSize: 12,
-                      letterSpacing: 1,
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    Saved in this browser
-                  </div>
-                  <button
-                    onClick={() => adjustSelectedLift(increment)}
-                    style={{
-                      width: 36,
-                      height: 44,
-                      background: "#222",
-                      border: "1px solid var(--border)",
-                      borderRadius: 6,
-                      color: "#fff",
-                      fontSize: 20,
-                      cursor: "pointer",
-                      fontWeight: 700,
-                    }}
-                  >
-                    +
-                  </button>
-                </div>
+                  −
+                </button>
+                <input
+                  type="number"
+                  value={inputValue}
+                  onChange={(e) => handleInput(e.target.value)}
+                  style={{
+                    flex: 1,
+                    background: "#111",
+                    border: "2px solid var(--accent)",
+                    borderRadius: 6,
+                    padding: "10px 12px",
+                    color: "#fff",
+                    fontFamily: "'Oswald', sans-serif",
+                    fontSize: 28,
+                    fontWeight: 700,
+                    textAlign: "center",
+                    outline: "none",
+                    width: "100%",
+                  }}
+                />
+                <button
+                  onClick={() => {
+                    const nw = workingWeight + increment;
+                    setWorkingWeight(nw);
+                    setInputValue(String(nw));
+                  }}
+                  style={{
+                    width: 36,
+                    height: 44,
+                    background: "#222",
+                    border: "1px solid var(--border)",
+                    borderRadius: 6,
+                    color: "#fff",
+                    fontSize: 20,
+                    cursor: "pointer",
+                    fontWeight: 700,
+                  }}
+                >
+                  +
+                </button>
               </div>
             </div>
             <div>
