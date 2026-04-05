@@ -14,11 +14,9 @@ const DEFAULT_WEIGHTS = {
 };
 
 const WARMUP_SCHEME = [
-  { pct: 0, reps: 10, label: "Bar Only" },
-  { pct: 0.4, reps: 5, label: "40%" },
-  { pct: 0.6, reps: 3, label: "60%" },
-  { pct: 0.75, reps: 2, label: "75%" },
-  { pct: 0.85, reps: 1, label: "85%" },
+  { pct: 0, reps: 8, label: "Bar Only" },
+  { pct: 0.5, reps: 5, label: "50%" },
+  { pct: 0.7, reps: 2, label: "70%" },
   { pct: 0.9, reps: 1, label: "90%" },
 ];
 
