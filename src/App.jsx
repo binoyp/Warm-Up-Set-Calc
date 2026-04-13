@@ -202,6 +202,7 @@ export default function WarmupCalculator() {
   const [liftInputs, setLiftInputs] = useState(initialState.liftInputs);
   const [deferredInstallPrompt, setDeferredInstallPrompt] = useState(null);
   const [isInstalled, setIsInstalled] = useState(false);
+  const [isUpdateReady, setIsUpdateReady] = useState(false);
 
   const barWeight = unit === "kg" ? BAR_KG : BAR_LB;
   const plates = unit === "kg" ? PLATES_KG : PLATES_LB;
@@ -249,6 +250,18 @@ export default function WarmupCalculator() {
     return () => {
       window.removeEventListener("beforeinstallprompt", onBeforeInstallPrompt);
       window.removeEventListener("appinstalled", onAppInstalled);
+    };
+  }, []);
+
+  useEffect(() => {
+    const onUpdateAvailable = () => {
+      setIsUpdateReady(true);
+    };
+
+    window.addEventListener("sw-update-available", onUpdateAvailable);
+
+    return () => {
+      window.removeEventListener("sw-update-available", onUpdateAvailable);
     };
   }, []);
 
@@ -311,6 +324,16 @@ export default function WarmupCalculator() {
     } finally {
       setDeferredInstallPrompt(null);
     }
+  };
+
+  const handleUpdateClick = () => {
+    const registration = window.__swRegistration;
+    if (registration?.waiting) {
+      registration.waiting.postMessage({ type: "SKIP_WAITING" });
+      return;
+    }
+
+    window.location.reload();
   };
 
   const liftEmoji = { squat: "🏋️", bench: "💪", deadlift: "🔥" };
@@ -535,6 +558,29 @@ export default function WarmupCalculator() {
           </div>
 
           <div style={{ marginTop: 14 }}>
+            {isUpdateReady ? (
+              <button
+                onClick={handleUpdateClick}
+                style={{
+                  width: "100%",
+                  height: 44,
+                  background: "#2ecc71",
+                  border: "none",
+                  borderRadius: 6,
+                  color: "#111",
+                  fontFamily: "'Oswald', sans-serif",
+                  fontSize: 16,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  textTransform: "uppercase",
+                  letterSpacing: 1,
+                  marginBottom: 10,
+                }}
+              >
+                Update Available - Refresh
+              </button>
+            ) : null}
+
             {isInstalled ? (
               <p style={{ fontSize: 12, color: "#9a9a9a", lineHeight: 1.4 }}>Installed app mode is active.</p>
             ) : deferredInstallPrompt ? (
