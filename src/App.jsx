@@ -200,6 +200,8 @@ export default function WarmupCalculator() {
   const [lift, setLift] = useState(initialState.lift);
   const [liftWeights, setLiftWeights] = useState(initialState.liftWeights);
   const [liftInputs, setLiftInputs] = useState(initialState.liftInputs);
+  const [deferredInstallPrompt, setDeferredInstallPrompt] = useState(null);
+  const [isInstalled, setIsInstalled] = useState(false);
 
   const barWeight = unit === "kg" ? BAR_KG : BAR_LB;
   const plates = unit === "kg" ? PLATES_KG : PLATES_LB;
@@ -221,6 +223,34 @@ export default function WarmupCalculator() {
       // Ignore storage failures so the calculator remains usable.
     }
   }, [unit, lift, liftWeights, liftInputs]);
+
+  useEffect(() => {
+    const installed =
+      window.matchMedia?.("(display-mode: standalone)")?.matches ||
+      window.navigator.standalone === true;
+
+    if (installed) {
+      setIsInstalled(true);
+    }
+
+    const onBeforeInstallPrompt = (event) => {
+      event.preventDefault();
+      setDeferredInstallPrompt(event);
+    };
+
+    const onAppInstalled = () => {
+      setIsInstalled(true);
+      setDeferredInstallPrompt(null);
+    };
+
+    window.addEventListener("beforeinstallprompt", onBeforeInstallPrompt);
+    window.addEventListener("appinstalled", onAppInstalled);
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", onBeforeInstallPrompt);
+      window.removeEventListener("appinstalled", onAppInstalled);
+    };
+  }, []);
 
   const warmupSets = useMemo(() => {
     return WARMUP_SCHEME.map((s) => {
@@ -270,6 +300,17 @@ export default function WarmupCalculator() {
     setLiftInputs(
       Object.fromEntries(Object.entries(convertedWeights).map(([name, value]) => [name, formatWeight(value)])),
     );
+  };
+
+  const handleInstallClick = async () => {
+    if (!deferredInstallPrompt) return;
+
+    deferredInstallPrompt.prompt();
+    try {
+      await deferredInstallPrompt.userChoice;
+    } finally {
+      setDeferredInstallPrompt(null);
+    }
   };
 
   const liftEmoji = { squat: "🏋️", bench: "💪", deadlift: "🔥" };
@@ -456,7 +497,7 @@ export default function WarmupCalculator() {
                 Browser Memory
               </label>
               <p style={{ fontSize: 12, color: "#9a9a9a", lineHeight: 1.4 }}>
-                Inputs and unit stay saved on this device.
+                Inputs stay saved and app content can load from local cache.
               </p>
             </div>
             <div>
@@ -491,6 +532,36 @@ export default function WarmupCalculator() {
                 {unit}
               </button>
             </div>
+          </div>
+
+          <div style={{ marginTop: 14 }}>
+            {isInstalled ? (
+              <p style={{ fontSize: 12, color: "#9a9a9a", lineHeight: 1.4 }}>Installed app mode is active.</p>
+            ) : deferredInstallPrompt ? (
+              <button
+                onClick={handleInstallClick}
+                style={{
+                  width: "100%",
+                  height: 44,
+                  background: "var(--accent)",
+                  border: "none",
+                  borderRadius: 6,
+                  color: "#fff",
+                  fontFamily: "'Oswald', sans-serif",
+                  fontSize: 16,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  textTransform: "uppercase",
+                  letterSpacing: 1,
+                }}
+              >
+                Install in Chrome
+              </button>
+            ) : (
+              <p style={{ fontSize: 12, color: "#9a9a9a", lineHeight: 1.4 }}>
+                In Chrome, open this site and use Install App from the address bar menu.
+              </p>
+            )}
           </div>
         </div>
 

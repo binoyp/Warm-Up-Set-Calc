@@ -43,3 +43,24 @@ npm run dev
 ```bash
 npm run build   # output in dist/
 ```
+
+## Offline Cache + Chrome Install
+
+This app is now configured as a Progressive Web App (PWA):
+
+- A service worker caches app assets for offline/local use after first load.
+- A web app manifest enables installability in Chrome.
+- The UI shows an "Install in Chrome" button when Chrome fires the install prompt event.
+
+To test locally:
+
+1. Build and preview:
+
+```bash
+npm run build
+npm run preview
+```
+
+2. Open the preview URL in Chrome.
+3. Use the in-app install button, or Chrome's address-bar install option.
+4. After first load, you can reload while offline and the app shell should still open.
